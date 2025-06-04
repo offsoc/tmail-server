@@ -202,6 +202,10 @@
             <artifactId>wiremock-standalone</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.linagora.tmail</groupId>
+            <artifactId>tmail-guice-common</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
@@ -320,6 +324,9 @@
                         </ports>
                         <appRoot>/root</appRoot>
                         <creationTime>USE_CURRENT_TIMESTAMP</creationTime>
+                        <extraClasspath>
+                            <item>/root/libs/*</item>
+                        </extraClasspath>
                     </container>
                     <extraDirectories>
                         <paths>
@@ -442,6 +449,9 @@
                                 </ports>
                                 <appRoot>/root</appRoot>
                                 <creationTime>USE_CURRENT_TIMESTAMP</creationTime>
+                                <extraClasspath>
+                                    <item>/root/libs/*</item>
+                                </extraClasspath>
                             </container>
                             <extraDirectories>
                                 <paths>

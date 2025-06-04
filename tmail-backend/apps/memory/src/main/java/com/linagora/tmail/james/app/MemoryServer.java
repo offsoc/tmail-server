@@ -62,6 +62,7 @@ import org.apache.james.modules.server.TaskManagerModule;
 import org.apache.james.modules.vault.DeletedMessageVaultModule;
 import org.apache.james.rate.limiter.memory.MemoryRateLimiterModule;
 import org.apache.james.util.Host;
+import org.apache.james.utils.GuiceLoader;
 
 import com.google.common.collect.ImmutableList;
 import com.google.inject.AbstractModule;
@@ -70,6 +71,8 @@ import com.google.inject.Provides;
 import com.google.inject.Singleton;
 import com.google.inject.util.Modules;
 import com.linagora.tmail.AmqpUri;
+import com.linagora.tmail.ExtensionModuleProvider;
+import com.linagora.tmail.NoopGuiceLoader;
 import com.linagora.tmail.OpenPaasContactsConsumerModule;
 import com.linagora.tmail.OpenPaasModule;
 import com.linagora.tmail.OpenPaasModuleChooserConfiguration;
@@ -228,10 +231,16 @@ public class MemoryServer {
             .combineWith(chooseLinagoraServiceDiscovery(configuration.linagoraServicesDiscoveryModuleChooserConfiguration()))
             .combineWith(choosePop3ServerModule(configuration))
             .combineWith(chooseDropListsModule(configuration))
+            .overrideWith(ExtensionModuleProvider.extentionModules(configuration.extentionConfiguration()))
             .overrideWith(chooseOpenPaas(configuration.openPaasModuleChooserConfiguration()))
             .overrideWith(chooseMailbox(configuration.mailboxConfiguration()))
             .overrideWith(chooseJmapModule(configuration))
-            .overrideWith(chooseJmapOidc(configuration));
+            .overrideWith(chooseJmapOidc(configuration))
+            .overrideWith(chooseJmapModule(configuration))
+            .overrideWith(binder -> {
+                binder.bind(GuiceLoader.class).to(NoopGuiceLoader.class);
+                binder.bind(NoopGuiceLoader.class).in(Singleton.class);
+            });
     }
 
     private static Module chooseJmapModule(MemoryConfiguration configuration) {
