@@ -38,8 +38,19 @@ import static org.apache.james.backends.opensearch.IndexCreationFactory.RAW;
 import java.util.Map;
 import java.util.Optional;
 
+import jakarta.inject.Inject;
+
+import org.apache.james.backends.opensearch.OpenSearchConfiguration;
 import org.apache.james.mailbox.opensearch.MailboxMappingFactory;
 import org.apache.james.mailbox.opensearch.json.JsonMessageConstants;
+import org.opensearch.client.opensearch._types.analysis.Analyzer;
+import org.opensearch.client.opensearch._types.analysis.CustomAnalyzer;
+import org.opensearch.client.opensearch._types.analysis.CustomNormalizer;
+import org.opensearch.client.opensearch._types.analysis.NGramTokenizer;
+import org.opensearch.client.opensearch._types.analysis.Normalizer;
+import org.opensearch.client.opensearch._types.analysis.TokenChar;
+import org.opensearch.client.opensearch._types.analysis.Tokenizer;
+import org.opensearch.client.opensearch._types.analysis.TokenizerDefinition;
 import org.opensearch.client.opensearch._types.mapping.BooleanProperty;
 import org.opensearch.client.opensearch._types.mapping.DateProperty;
 import org.opensearch.client.opensearch._types.mapping.DynamicMapping;
@@ -52,12 +63,33 @@ import org.opensearch.client.opensearch._types.mapping.RoutingField;
 import org.opensearch.client.opensearch._types.mapping.TextProperty;
 import org.opensearch.client.opensearch._types.mapping.TypeMapping;
 import org.opensearch.client.opensearch.indices.IndexSettings;
+import org.opensearch.client.opensearch.indices.IndexSettingsAnalysis;
 
 import com.google.common.collect.ImmutableMap;
 
 public class TmailMailboxMappingFactory implements MailboxMappingFactory {
     private static final String STANDARD = "standard";
     private static final String SIMPLE = "simple";
+    private static final String NGRAM = "ngram";
+    private static final String NGRAM_ANALYZER = "ngram_analyzer";
+    private static final String FILENAME_ANALYZER = "filename_analyzer";
+    private static final String NGRAM_TOKENIZER = "ngram_tokenizer";
+    private static final String WHITESPACE_TOKENIZER = "whitespace";
+    private static final String LOWERCASE = "lowercase";
+    private static final String ASCIIFOLDING = "asciifolding";
+    private static final String WORD_DELIMITER_GRAPH = "word_delimiter_graph";
+    private static final int DEFAULT_MAX_NGRAM_DIFF = 4;
+    private static final int DEFAULT_MIN_NGRAM = 2;
+    private static final int DEFAULT_MAX_NGRAM = 6;
+
+    private final OpenSearchConfiguration openSearchConfiguration;
+    private final TmailOpenSearchMailboxConfiguration tmailOpenSearchMailboxConfiguration;
+
+    @Inject
+    public TmailMailboxMappingFactory(OpenSearchConfiguration openSearchConfiguration, TmailOpenSearchMailboxConfiguration tmailOpenSearchMailboxConfiguration) {
+        this.openSearchConfiguration = openSearchConfiguration;
+        this.tmailOpenSearchMailboxConfiguration = tmailOpenSearchMailboxConfiguration;
+    }
 
     @Override
     public TypeMapping getMappingContent() {
@@ -70,7 +102,7 @@ public class TmailMailboxMappingFactory implements MailboxMappingFactory {
             .build();
     }
 
-    private static Map<String, Property> generateProperties() {
+    private Map<String, Property> generateProperties() {
         return new ImmutableMap.Builder<String, Property>()
             .put(JsonMessageConstants.MESSAGE_ID, new Property.Builder()
                 .keyword(new KeywordProperty.Builder().store(true).build())
@@ -173,9 +205,7 @@ public class TmailMailboxMappingFactory implements MailboxMappingFactory {
             .put(JsonMessageConstants.SUBJECT, new Property.Builder()
                 .text(new TextProperty.Builder()
                     .analyzer(KEEP_MAIL_AND_URL)
-                    .fields(RAW, new Property.Builder()
-                        .keyword(new KeywordProperty.Builder().normalizer(CASE_INSENSITIVE).build())
-                        .build())
+                    .fields(getSubjectFieds())
                     .build())
                 .build())
             .put(JsonMessageConstants.TO, new Property.Builder()
@@ -281,9 +311,7 @@ public class TmailMailboxMappingFactory implements MailboxMappingFactory {
             .put(JsonMessageConstants.ATTACHMENTS, new Property.Builder()
                 .object(new ObjectProperty.Builder()
                     .properties(ImmutableMap.of(
-                        JsonMessageConstants.Attachment.FILENAME, new Property.Builder()
-                            .text(new TextProperty.Builder().analyzer(STANDARD).build())
-                            .build(),
+                        JsonMessageConstants.Attachment.FILENAME, buildAttachmentFilenameProperty(),
                         JsonMessageConstants.Attachment.TEXT_CONTENT, new Property.Builder()
                             .text(new TextProperty.Builder().analyzer(STANDARD).build())
                             .build(),
@@ -305,8 +333,84 @@ public class TmailMailboxMappingFactory implements MailboxMappingFactory {
             .build();
     }
 
+    private Map<String, Property> getSubjectFieds() {
+        ImmutableMap.Builder<String, Property> subjectFields = new ImmutableMap.Builder<String, Property>()
+            .put(RAW, new Property.Builder()
+                .keyword(new KeywordProperty.Builder().normalizer(CASE_INSENSITIVE).build())
+                .build());
+
+        if (tmailOpenSearchMailboxConfiguration.subjectNgramEnabled()) {
+            subjectFields.put(NGRAM, new Property.Builder()
+                .text(new TextProperty.Builder().analyzer(NGRAM_ANALYZER).searchAnalyzer(FILENAME_ANALYZER).build())
+                .build());
+        }
+
+        return subjectFields.build();
+    }
+
+    private Property buildAttachmentFilenameProperty() {
+        if (tmailOpenSearchMailboxConfiguration.attachmentFilenameNgramEnabled()) {
+            return new Property.Builder()
+                .text(new TextProperty.Builder()
+                    .analyzer(FILENAME_ANALYZER)
+                    .searchAnalyzer(FILENAME_ANALYZER)
+                    .fields(NGRAM, new Property.Builder()
+                        .text(new TextProperty.Builder()
+                            .analyzer(NGRAM_ANALYZER)
+                            .searchAnalyzer(FILENAME_ANALYZER)
+                            .build())
+                        .build())
+                    .build())
+                .build();
+        } else {
+            return new Property.Builder()
+                .text(new TextProperty.Builder().analyzer(STANDARD).build())
+                .build();
+        }
+    }
+
     @Override
     public Optional<IndexSettings> getIndexSettings() {
-        return Optional.empty();
+        return Optional.of(new IndexSettings.Builder()
+            .numberOfShards(Integer.toString(openSearchConfiguration.getNbShards()))
+            .numberOfReplicas(Integer.toString(openSearchConfiguration.getNbReplica()))
+            .index(new IndexSettings.Builder()
+                .maxNgramDiff(DEFAULT_MAX_NGRAM_DIFF)
+                .build())
+            .analysis(new IndexSettingsAnalysis.Builder()
+                .normalizer(CASE_INSENSITIVE, new Normalizer.Builder()
+                    .custom(new CustomNormalizer.Builder()
+                        .filter("lowercase", "asciifolding")
+                        .build())
+                    .build())
+                .analyzer(new ImmutableMap.Builder<String, Analyzer>()
+                    .put(KEEP_MAIL_AND_URL, new Analyzer.Builder().custom(
+                            new CustomAnalyzer.Builder()
+                                .tokenizer("uax_url_email")
+                                .filter("lowercase", "stop")
+                                .build())
+                        .build())
+                    .put(NGRAM_ANALYZER, new Analyzer(new CustomAnalyzer.Builder()
+                        .tokenizer(NGRAM_TOKENIZER)
+                        .filter(ASCIIFOLDING, LOWERCASE)
+                        .build()))
+                    .put(FILENAME_ANALYZER, new Analyzer.Builder()
+                        .custom(new CustomAnalyzer.Builder()
+                            .tokenizer(WHITESPACE_TOKENIZER)
+                            .filter(WORD_DELIMITER_GRAPH, ASCIIFOLDING, LOWERCASE)
+                            .build())
+                        .build())
+                    .build())
+                .tokenizer(new ImmutableMap.Builder<String, Tokenizer>()
+                    .put(NGRAM_TOKENIZER, new Tokenizer.Builder()
+                        .definition(new TokenizerDefinition(new NGramTokenizer.Builder()
+                            .minGram(DEFAULT_MIN_NGRAM)
+                            .maxGram(DEFAULT_MAX_NGRAM)
+                            .tokenChars(TokenChar.Letter, TokenChar.Digit)
+                            .build()))
+                        .build())
+                    .build())
+                .build())
+            .build());
     }
 }
