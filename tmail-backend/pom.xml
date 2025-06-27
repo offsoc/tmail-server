@@ -97,9 +97,9 @@
     <properties>
         <james.groupId>org.apache.james</james.groupId>
         <james.version>3.9.0-SNAPSHOT</james.version>
-        <firebase-admin-sdk.version>9.3.0</firebase-admin-sdk.version>
-        <bouncycastle.version>1.78.1</bouncycastle.version>
-        <mongodb.version>5.3.1</mongodb.version>
+        <firebase-admin-sdk.version>9.5.0</firebase-admin-sdk.version>
+        <bouncycastle.version>1.81</bouncycastle.version>
+        <mongodb.version>5.5.1</mongodb.version>
         <scala.base>2.13</scala.base>
     </properties>
 
@@ -496,18 +496,18 @@
             <dependency>
                 <groupId>com.ibm.icu</groupId>
                 <artifactId>icu4j</artifactId>
-                <version>75.1</version>
+                <version>77.1</version>
             </dependency>
             <dependency>
                 <groupId>org.wiremock</groupId>
                 <artifactId>wiremock-standalone</artifactId>
-                <version>3.10.0</version>
+                <version>3.13.1</version>
             </dependency>
             <dependency>
                 <groupId>org.mongodb</groupId>
                 <artifactId>mongodb-driver-reactivestreams</artifactId>
                 <scope>test</scope>
-                <version>5.3.1</version>
+                <version>${mongodb.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
