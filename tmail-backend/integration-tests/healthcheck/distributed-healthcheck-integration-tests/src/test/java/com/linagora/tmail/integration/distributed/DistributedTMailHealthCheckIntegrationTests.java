@@ -19,7 +19,11 @@
 package com.linagora.tmail.integration.distributed;
 
 import static io.restassured.RestAssured.given;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasItems;
 
 import java.util.List;
 
@@ -27,6 +31,7 @@ import org.apache.james.GuiceJamesServer;
 import org.apache.james.JamesServerBuilder;
 import org.apache.james.JamesServerExtension;
 import org.apache.james.backends.redis.RedisExtension;
+import org.apache.james.core.healthcheck.ResultStatus;
 import org.apache.james.modules.AwsS3BlobStoreExtension;
 import org.apache.james.rate.limiter.redis.RedisRateLimiterModule;
 import org.apache.james.utils.WebAdminGuiceProbe;
@@ -43,6 +48,7 @@ import com.linagora.tmail.james.app.DistributedServer;
 import com.linagora.tmail.james.app.DockerOpenSearchExtension;
 import com.linagora.tmail.james.app.EventBusKeysChoice;
 import com.linagora.tmail.james.app.RabbitMQExtension;
+import com.linagora.tmail.james.jmap.settings.TWPSettingsModuleChooserConfiguration;
 import com.linagora.tmail.module.LinagoraTestJMAPServerModule;
 import com.linagora.tmail.rspamd.RspamdExtensionModule;
 
@@ -62,6 +68,7 @@ public class DistributedTMailHealthCheckIntegrationTests extends TMailHealthChec
                 .noCryptoConfig()
                 .disableSingleSave())
             .eventBusKeysChoice(EventBusKeysChoice.REDIS)
+            .twpSettingsModuleChooserConfiguration(new TWPSettingsModuleChooserConfiguration(true))
             .build())
         .extension(new DockerOpenSearchExtension())
         .extension(new CassandraExtension())
@@ -92,5 +99,37 @@ public class DistributedTMailHealthCheckIntegrationTests extends TMailHealthChec
                 .getList("checks.componentName", String.class);
 
         assertThat(listComponentNames).containsExactlyInAnyOrder("IMAPHealthCheck", "Cassandra backend");
+    }
+
+    @Test
+    void twpDeadLetterQueueShouldBeHealthyWhenTWPSettingEnabled(GuiceJamesServer jamesServer) {
+        WebAdminGuiceProbe probe = jamesServer.getProbe(WebAdminGuiceProbe.class);
+        RestAssured.requestSpecification = WebAdminUtils.buildRequestSpecification(probe.getWebAdminPort()).build();
+
+        given()
+            .queryParam("check", "TWPSettingsDeadLetterQueueHealthCheck")
+        .when()
+            .get("/healthcheck")
+        .then()
+            .statusCode(HttpStatus.OK_200)
+            .body("status", equalTo(ResultStatus.HEALTHY.getValue()))
+            .body("checks.componentName", hasItems("TWPSettingsDeadLetterQueueHealthCheck"));
+    }
+
+    @Test
+    void twpSettingsConsumerHealthcheckShouldBeHealthyWhenTWPSettingEnabled(GuiceJamesServer jamesServer) {
+        WebAdminGuiceProbe probe = jamesServer.getProbe(WebAdminGuiceProbe.class);
+        RestAssured.requestSpecification = WebAdminUtils.buildRequestSpecification(probe.getWebAdminPort()).build();
+
+        await().atMost(30, SECONDS)
+            .untilAsserted(() ->
+                given()
+                    .queryParam("check", "TWPSettingsQueueConsumerHealthCheck")
+                .when()
+                    .get("/healthcheck")
+                .then()
+                    .statusCode(HttpStatus.OK_200)
+                    .body("status", equalTo(ResultStatus.HEALTHY.getValue()))
+                    .body("checks.componentName", hasItems("TWPSettingsQueueConsumerHealthCheck")));
     }
 }

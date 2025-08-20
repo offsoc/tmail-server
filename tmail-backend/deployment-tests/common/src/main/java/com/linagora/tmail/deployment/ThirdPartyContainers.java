@@ -28,12 +28,12 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 
 public class ThirdPartyContainers {
-    public static String OS_IMAGE_NAME = "opensearchproject/opensearch:2.14.0";
+    public static String OS_IMAGE_NAME = "opensearchproject/opensearch:2.19.2";
     public static String OS_NETWORK_ALIAS = "opensearch";
 
     @SuppressWarnings("resource")
     public static GenericContainer<?> createCassandra(Network network) {
-        return new GenericContainer<>("cassandra:4.1.5")
+        return new GenericContainer<>("cassandra:4.1.9")
             .withNetworkAliases("cassandra")
             .withNetwork(network)
             .withEnv("JVM_OPTS", "-Dcassandra.skip_wait_for_gossip_to_settle=0 -Dcassandra.initial_token=1")
@@ -61,7 +61,7 @@ public class ThirdPartyContainers {
 
     @SuppressWarnings("resource")
     public static GenericContainer<?> createRabbitMQ(Network network) {
-        return new GenericContainer<>("rabbitmq:3.13.3-management")
+        return new GenericContainer<>("rabbitmq:4.0.9-management")
             .withNetworkAliases("rabbitmq")
             .withNetwork(network)
             .withExposedPorts(5672, 15672)
@@ -75,7 +75,7 @@ public class ThirdPartyContainers {
 
     @SuppressWarnings("resource")
     public static GenericContainer<?> createS3(Network network) {
-        return new GenericContainer<>("registry.scality.com/cloudserver/cloudserver:8.7.25")
+        return new GenericContainer<>("ghcr.io/scality/cloudserver:c1ba296859690c1cbbec609aaae430f6b04b4745")
             .withNetworkAliases("s3", "s3.docker.test")
             .withNetwork(network)
             .withEnv("SCALITY_ACCESS_KEY_ID", "accessKey1")
@@ -89,7 +89,7 @@ public class ThirdPartyContainers {
 
     @SuppressWarnings("resource")
     public static GenericContainer<?> createRedis(Network network) {
-        return new GenericContainer<>(DockerImageName.parse("redis").withTag("7.2.5"))
+        return new GenericContainer<>(DockerImageName.parse("redis").withTag("8.0.2"))
             .withExposedPorts(6379)
             .withCreateContainerCmdModifier(createContainerCmd -> createContainerCmd.withName("twake-mail-redis-testing" + UUID.randomUUID()))
             .withCommand("--loglevel", "debug")

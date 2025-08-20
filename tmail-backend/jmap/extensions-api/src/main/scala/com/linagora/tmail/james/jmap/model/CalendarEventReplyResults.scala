@@ -18,10 +18,12 @@
 
 package com.linagora.tmail.james.jmap.model
 
+import com.linagora.tmail.james.jmap.CalendarEventNotFoundException
+import com.linagora.tmail.james.jmap.calendar.CalendarEventModifier.NoUpdateRequiredException
+import eu.timepit.refined.auto._
 import org.apache.james.jmap.core.SetError
 import org.apache.james.jmap.core.SetError.SetErrorDescription
 import org.apache.james.jmap.mail.{BlobId, BlobIds}
-import org.apache.james.mailbox.MailboxSession
 import org.slf4j.{Logger, LoggerFactory}
 
 object CalendarEventReplyResults {
@@ -52,11 +54,14 @@ object CalendarEventReplyResults {
     done(BlobId.of(blobId).get)
 
   private def asSetError(throwable: Throwable, username: String): SetError = throwable match {
-    case _: InvalidCalendarFileException | _: IllegalArgumentException =>
-      LOGGER.info("Error when generate reply mail for {}: {}", username, throwable.getMessage)
+    case _: InvalidCalendarFileException | _: IllegalArgumentException | _: NoUpdateRequiredException =>
+      LOGGER.info("Error when replying to event invitation for {}: {}", username, throwable.getMessage)
       SetError.invalidPatch(SetErrorDescription(throwable.getMessage))
+    case _: CalendarEventNotFoundException =>
+      LOGGER.info("Error when replying to event invitation for {}: {}", username, throwable.getMessage)
+      SetError("eventNotFound", SetErrorDescription("The event you reply to does not exist on your calendar"), None)
     case _ =>
-      LOGGER.error("serverFail to generate reply mail for {}", username, throwable)
+      LOGGER.error("serverFail to reply event invitation for {}", username, throwable)
       SetError.serverFail(SetErrorDescription(throwable.getMessage))
   }
 }

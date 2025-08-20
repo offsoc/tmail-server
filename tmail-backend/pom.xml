@@ -43,12 +43,16 @@
 
         <module>combined-identity</module>
 
+        <module>data/data-cassandra</module>
         <module>data/data-rabbitmq</module>
+        <module>data/data-postgres</module>
 
         <module>deployment-tests</module>
 
         <module>guice/blob-guice</module>
         <module>guice/common</module>
+        <module>guice/data-cassandra</module>
+        <module>guice/data-postgres</module>
         <module>guice/distributed</module>
         <module>guice/encrypted-mailbox</module>
         <module>guice/protocols/jmap</module>
@@ -79,6 +83,10 @@
         <module>rate-limiter/rate-limiter-cassandra</module>
         <module>rate-limiter/rate-limiter-postgres</module>
 
+        <module>saas/saas-api</module>
+        <module>saas/saas-cassandra</module>
+        <module>saas/saas-postgres</module>
+
         <module>smtp-extensions</module>
 
         <module>webadmin/webadmin-email-address-contact</module>
@@ -97,7 +105,7 @@
     <properties>
         <james.groupId>org.apache.james</james.groupId>
         <james.version>3.9.0-SNAPSHOT</james.version>
-        <firebase-admin-sdk.version>9.5.0</firebase-admin-sdk.version>
+        <firebase-admin-sdk.version>9.3.0</firebase-admin-sdk.version>
         <bouncycastle.version>1.81</bouncycastle.version>
         <mongodb.version>5.5.1</mongodb.version>
         <scala.base>2.13</scala.base>
@@ -213,6 +221,16 @@
             </dependency>
             <dependency>
                 <groupId>${project.groupId}</groupId>
+                <artifactId>tmail-data-cassandra</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>tmail-data-postgres</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
                 <artifactId>tmail-guice-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -224,6 +242,17 @@
             <dependency>
                 <groupId>${project.groupId}</groupId>
                 <artifactId>tmail-guice-common</artifactId>
+                <type>test-jar</type>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>tmail-guice-data-cassandra</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>tmail-guice-data-postgres</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -313,6 +342,27 @@
                 <groupId>${project.groupId}</groupId>
                 <artifactId>tmail-rate-limiter-api</artifactId>
                 <type>test-jar</type>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>tmail-saas-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>tmail-saas-api</artifactId>
+                <type>test-jar</type>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>tmail-saas-cassandra</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>tmail-saas-postgres</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

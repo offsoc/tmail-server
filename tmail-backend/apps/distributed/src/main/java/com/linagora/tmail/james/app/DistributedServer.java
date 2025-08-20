@@ -46,9 +46,7 @@ import org.apache.james.jmap.JMAPModule;
 import org.apache.james.jmap.rfc8621.RFC8621MethodsModule;
 import org.apache.james.json.DTO;
 import org.apache.james.json.DTOModule;
-import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxSession;
-import org.apache.james.mailbox.cassandra.CassandraMailboxManager;
 import org.apache.james.mailbox.model.MessageId;
 import org.apache.james.mailbox.model.MultimailboxesSearchQuery;
 import org.apache.james.mailbox.searchhighligt.SearchHighlighter;
@@ -66,7 +64,6 @@ import org.apache.james.modules.DistributedTaskSerializationModule;
 import org.apache.james.modules.MailboxModule;
 import org.apache.james.modules.MailetProcessingModule;
 import org.apache.james.modules.data.CassandraDLPConfigurationStoreModule;
-import org.apache.james.modules.data.CassandraDelegationStoreModule;
 import org.apache.james.modules.data.CassandraDomainListModule;
 import org.apache.james.modules.data.CassandraDropListsModule;
 import org.apache.james.modules.data.CassandraJmapModule;
@@ -79,7 +76,6 @@ import org.apache.james.modules.data.CassandraVacationModule;
 import org.apache.james.modules.event.JMAPEventBusModule;
 import org.apache.james.modules.event.MailboxEventBusModule;
 import org.apache.james.modules.eventstore.CassandraEventStoreModule;
-import org.apache.james.modules.mailbox.CassandraBlobStoreDependenciesModule;
 import org.apache.james.modules.mailbox.CassandraDeletedMessageVaultModule;
 import org.apache.james.modules.mailbox.CassandraMailboxModule;
 import org.apache.james.modules.mailbox.CassandraMailboxQuotaLegacyModule;
@@ -140,7 +136,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.AbstractModule;
 import com.google.inject.Module;
-import com.google.inject.Provides;
 import com.google.inject.Scopes;
 import com.google.inject.Singleton;
 import com.google.inject.TypeLiteral;
@@ -160,13 +155,6 @@ import com.linagora.tmail.UsersRepositoryModuleChooser;
 import com.linagora.tmail.blob.guice.BlobStoreCacheModulesChooser;
 import com.linagora.tmail.blob.guice.BlobStoreConfiguration;
 import com.linagora.tmail.blob.guice.BlobStoreModulesChooser;
-import com.linagora.tmail.encrypted.ClearEmailContentFactory;
-import com.linagora.tmail.encrypted.EncryptedMailboxManager;
-import com.linagora.tmail.encrypted.KeystoreManager;
-import com.linagora.tmail.encrypted.MailboxConfiguration;
-import com.linagora.tmail.encrypted.cassandra.CassandraEncryptedEmailContentStore;
-import com.linagora.tmail.encrypted.cassandra.EncryptedEmailContentStoreCassandraModule;
-import com.linagora.tmail.encrypted.cassandra.KeystoreCassandraModule;
 import com.linagora.tmail.event.DistributedEmailAddressContactEventModule;
 import com.linagora.tmail.event.EmailAddressContactRabbitMQEventBusModule;
 import com.linagora.tmail.event.RabbitMQAndRedisEventBusModule;
@@ -189,15 +177,11 @@ import com.linagora.tmail.james.jmap.method.ContactAutocompleteMethodModule;
 import com.linagora.tmail.james.jmap.method.CustomMethodModule;
 import com.linagora.tmail.james.jmap.method.EmailRecoveryActionMethodModule;
 import com.linagora.tmail.james.jmap.method.EmailSendMethodModule;
-import com.linagora.tmail.james.jmap.method.EncryptedEmailDetailedViewGetMethodModule;
-import com.linagora.tmail.james.jmap.method.EncryptedEmailFastViewGetMethodModule;
 import com.linagora.tmail.james.jmap.method.FilterGetMethodModule;
 import com.linagora.tmail.james.jmap.method.FilterSetMethodModule;
 import com.linagora.tmail.james.jmap.method.ForwardGetMethodModule;
 import com.linagora.tmail.james.jmap.method.ForwardSetMethodModule;
 import com.linagora.tmail.james.jmap.method.JmapSettingsMethodModule;
-import com.linagora.tmail.james.jmap.method.KeystoreGetMethodModule;
-import com.linagora.tmail.james.jmap.method.KeystoreSetMethodModule;
 import com.linagora.tmail.james.jmap.method.LabelMethodModule;
 import com.linagora.tmail.james.jmap.method.MailboxClearMethodModule;
 import com.linagora.tmail.james.jmap.method.MessageVaultCapabilitiesModule;
@@ -214,10 +198,13 @@ import com.linagora.tmail.james.jmap.routes.DownloadAllRoutesModule;
 import com.linagora.tmail.james.jmap.service.discovery.LinagoraServicesDiscoveryModule;
 import com.linagora.tmail.james.jmap.service.discovery.LinagoraServicesDiscoveryModuleChooserConfiguration;
 import com.linagora.tmail.james.jmap.settings.CassandraJmapSettingsRepositoryModule;
+import com.linagora.tmail.james.jmap.settings.TWPSettingsModule;
+import com.linagora.tmail.james.jmap.settings.TWPSettingsModuleChooserConfiguration;
 import com.linagora.tmail.james.jmap.team.mailboxes.TeamMailboxJmapModule;
 import com.linagora.tmail.james.jmap.ticket.CassandraTicketStoreModule;
 import com.linagora.tmail.james.jmap.ticket.TicketRoutesModule;
 import com.linagora.tmail.mailbox.opensearch.TmailOpenSearchMailboxMappingModule;
+import com.linagora.tmail.modules.data.TMailCassandraDelegationStoreModule;
 import com.linagora.tmail.rate.limiter.api.cassandra.module.CassandraRateLimitingModule;
 import com.linagora.tmail.rspamd.RspamdModule;
 import com.linagora.tmail.team.TMailQuotaUsernameSupplier;
@@ -290,9 +277,6 @@ public class DistributedServer {
         new ContactAutocompleteMethodModule(),
         new CassandraJmapModule(),
         new CustomMethodModule(),
-        new EncryptedEmailContentStoreCassandraModule(),
-        new EncryptedEmailDetailedViewGetMethodModule(),
-        new EncryptedEmailFastViewGetMethodModule(),
         new EmailSendMethodModule(),
         new FilterGetMethodModule(),
         new FilterSetMethodModule(),
@@ -304,9 +288,6 @@ public class DistributedServer {
         new TMailCleverBlobResolverModule(),
         new JmapEventBusModule(),
         new PublicAssetsModule(),
-        new KeystoreCassandraModule(),
-        new KeystoreGetMethodModule(),
-        new KeystoreSetMethodModule(),
         new TicketRoutesModule(),
         new MessageVaultCapabilitiesModule(),
         new WebFingerModule(),
@@ -334,7 +315,6 @@ public class DistributedServer {
             .toInstance(ImmutableSet.of());
 
     public static final Module CASSANDRA_SERVER_CORE_MODULE = Modules.combine(
-        new CassandraBlobStoreDependenciesModule(),
         new CassandraDomainListModule(),
         new CassandraDLPConfigurationStoreModule(),
         new CassandraEventStoreModule(),
@@ -345,7 +325,7 @@ public class DistributedServer {
         new CassandraSieveRepositoryModule(),
         BLOB_MODULE,
         CASSANDRA_EVENT_STORE_JSON_SERIALIZATION_DEFAULT_MODULE,
-        new CassandraDelegationStoreModule());
+        new TMailCassandraDelegationStoreModule());
 
     public static final Module CASSANDRA_MAILBOX_MODULE = Modules.combine(
         new CassandraConsistencyTaskSerializationModule(),
@@ -440,8 +420,8 @@ public class DistributedServer {
                 binder.bind(NoopGuiceLoader.class).in(Singleton.class);
             })
             .overrideWith(chooseOpenPaasModule(configuration.openPaasModuleChooserConfiguration()))
+            .overrideWith(chooseTWPSettingsModule(configuration.twpSettingsModuleChooserConfiguration()))
             .overrideWith(chooseModules(searchConfiguration))
-            .overrideWith(chooseMailbox(configuration.mailboxConfiguration()))
             .overrideWith(chooseJmapModule(configuration))
             .overrideWith(overrideEventBusModule(configuration))
             .overrideWith(chooseDropListsModule(configuration))
@@ -502,23 +482,6 @@ public class DistributedServer {
         };
     }
 
-    private static class EncryptedMailboxModule extends AbstractModule {
-        @Provides
-        @Singleton
-        MailboxManager provide(CassandraMailboxManager mailboxManager, KeystoreManager keystoreManager,
-                               ClearEmailContentFactory clearEmailContentFactory,
-                               CassandraEncryptedEmailContentStore contentStore) {
-            return new EncryptedMailboxManager(mailboxManager, keystoreManager, clearEmailContentFactory, contentStore);
-        }
-    }
-
-    private static List<Module> chooseMailbox(MailboxConfiguration mailboxConfiguration) {
-        if (mailboxConfiguration.isEncryptionEnabled()) {
-            return ImmutableList.of(new EncryptedMailboxModule());
-        }
-        return ImmutableList.of();
-    }
-
     private static class FirebaseListenerDistributedModule extends AbstractModule {
         @ProvidesIntoSet
         InitializationOperation registerFirebaseListener(@Named(InjectionKeys.JMAP) EventBus instance, FirebasePushListener firebasePushListener) {
@@ -555,6 +518,13 @@ public class DistributedServer {
             return moduleBuilder.build();
         }
         return List.of(CALDAV_SUPPORT_MODULE_PROVIDER.apply(!CALDAV_SUPPORTED));
+    }
+
+    private static List<Module> chooseTWPSettingsModule(TWPSettingsModuleChooserConfiguration twpSettingsModuleChooserConfiguration) {
+        if (twpSettingsModuleChooserConfiguration.enabled()) {
+            return List.of(new TWPSettingsModule());
+        }
+        return List.of();
     }
 
     private static List<Module> chooseRedisRateLimiterModule(DistributedJamesConfiguration configuration) {

@@ -63,7 +63,6 @@ import org.apache.james.modules.data.PostgresDataJmapModule;
 import org.apache.james.modules.data.PostgresDataModule;
 import org.apache.james.modules.data.PostgresDelegationStoreModule;
 import org.apache.james.modules.data.PostgresEventStoreModule;
-import org.apache.james.modules.data.PostgresUsersRepositoryModule;
 import org.apache.james.modules.data.PostgresVacationModule;
 import org.apache.james.modules.data.SievePostgresRepositoryModules;
 import org.apache.james.modules.event.JMAPEventBusModule;
@@ -135,10 +134,6 @@ import com.linagora.tmail.NoopGuiceLoader;
 import com.linagora.tmail.ScheduledReconnectionHandler;
 import com.linagora.tmail.UsersRepositoryModuleChooser;
 import com.linagora.tmail.blob.guice.BlobStoreModulesChooser;
-import com.linagora.tmail.encrypted.MailboxConfiguration;
-import com.linagora.tmail.encrypted.postgres.PostgresEncryptedEmailContentStoreModule;
-import com.linagora.tmail.encrypted.postgres.PostgresEncryptedMailboxModule;
-import com.linagora.tmail.encrypted.postgres.PostgresKeystoreModule;
 import com.linagora.tmail.event.DistributedEmailAddressContactEventModule;
 import com.linagora.tmail.event.EmailAddressContactRabbitMQEventBusModule;
 import com.linagora.tmail.event.TMailJMAPListenerModule;
@@ -160,15 +155,11 @@ import com.linagora.tmail.james.jmap.method.ContactAutocompleteMethodModule;
 import com.linagora.tmail.james.jmap.method.CustomMethodModule;
 import com.linagora.tmail.james.jmap.method.EmailRecoveryActionMethodModule;
 import com.linagora.tmail.james.jmap.method.EmailSendMethodModule;
-import com.linagora.tmail.james.jmap.method.EncryptedEmailDetailedViewGetMethodModule;
-import com.linagora.tmail.james.jmap.method.EncryptedEmailFastViewGetMethodModule;
 import com.linagora.tmail.james.jmap.method.FilterGetMethodModule;
 import com.linagora.tmail.james.jmap.method.FilterSetMethodModule;
 import com.linagora.tmail.james.jmap.method.ForwardGetMethodModule;
 import com.linagora.tmail.james.jmap.method.ForwardSetMethodModule;
 import com.linagora.tmail.james.jmap.method.JmapSettingsMethodModule;
-import com.linagora.tmail.james.jmap.method.KeystoreGetMethodModule;
-import com.linagora.tmail.james.jmap.method.KeystoreSetMethodModule;
 import com.linagora.tmail.james.jmap.method.LabelMethodModule;
 import com.linagora.tmail.james.jmap.method.MailboxClearMethodModule;
 import com.linagora.tmail.james.jmap.module.OSContactAutoCompleteModule;
@@ -187,6 +178,7 @@ import com.linagora.tmail.james.jmap.team.mailboxes.TeamMailboxJmapModule;
 import com.linagora.tmail.james.jmap.ticket.PostgresTicketStoreModule;
 import com.linagora.tmail.james.jmap.ticket.TicketRoutesModule;
 import com.linagora.tmail.mailbox.opensearch.TmailOpenSearchMailboxMappingModule;
+import com.linagora.tmail.modules.data.TMailPostgresUsersRepositoryModule;
 import com.linagora.tmail.rate.limiter.api.postgres.module.PostgresRateLimitingModule;
 import com.linagora.tmail.rspamd.RspamdModule;
 import com.linagora.tmail.team.TMailQuotaUsernameSupplier;
@@ -262,7 +254,6 @@ public class PostgresTmailServer {
                 binder.bind(GuiceLoader.class).to(NoopGuiceLoader.class);
                 binder.bind(NoopGuiceLoader.class).in(Scopes.SINGLETON);
             })
-            .overrideWith(chooseMailbox(configuration.mailboxConfiguration()))
             .overrideWith(chooseJmapModule(configuration))
             .overrideWith(chooseTaskManagerModules(configuration))
             .overrideWith(chooseJmapOidc(configuration))
@@ -306,17 +297,11 @@ public class PostgresTmailServer {
         new CalendarEventMethodModule(),
         new ContactAutocompleteMethodModule(),
         new CustomMethodModule(),
-        new EncryptedEmailDetailedViewGetMethodModule(),
-        new EncryptedEmailFastViewGetMethodModule(),
         new EmailSendMethodModule(),
         new FilterGetMethodModule(),
         new FilterSetMethodModule(),
         new ForwardGetMethodModule(),
-        new PostgresEncryptedEmailContentStoreModule(),
-        new PostgresKeystoreModule(),
         new ForwardSetMethodModule(),
-        new KeystoreSetMethodModule(),
-        new KeystoreGetMethodModule(),
         new TicketRoutesModule(),
         new WebFingerModule(),
         new EmailRecoveryActionMethodModule(),
@@ -441,10 +426,10 @@ public class PostgresTmailServer {
     }
 
     public static Module chooseUserRepositoryModule(PostgresTmailConfiguration configuration) {
-        return Modules.combine(PostgresUsersRepositoryModule.USER_CONFIGURATION_MODULE,
+        return Modules.combine(TMailPostgresUsersRepositoryModule.USER_CONFIGURATION_MODULE,
             new UsersRepositoryModuleChooser(
                 DatabaseCombinedUserRequireModule.of(PostgresUsersDAO.class),
-                new PostgresUsersRepositoryModule())
+                new TMailPostgresUsersRepositoryModule())
                 .chooseModule(configuration.usersRepositoryImplementation()));
     }
 
@@ -531,13 +516,6 @@ public class PostgresTmailServer {
             return List.of(new LinagoraServicesDiscoveryModule());
         }
         return List.of();
-    }
-
-    private static Module chooseMailbox(MailboxConfiguration mailboxConfiguration) {
-        if (mailboxConfiguration.isEncryptionEnabled()) {
-            return new PostgresEncryptedMailboxModule();
-        }
-        return Modules.EMPTY_MODULE;
     }
 
     private static Module chooseRLSSupportPostgresMailboxModule(PostgresTmailConfiguration configuration) {

@@ -51,7 +51,7 @@ services:
       - tmail
 
   opensearch:
-    image: opensearchproject/opensearch:2.8.0
+    image: opensearchproject/opensearch:2.19.2
     container_name: opensearch
     healthcheck:
       test: ["CMD", "curl", "-s", "http://opensearch:9200"]
@@ -66,7 +66,7 @@ services:
       - tmail
 
   postgres:
-    image: postgres:16.1
+    image: postgres:16.9
     container_name: postgres
     ports:
       - "5432:5432"
@@ -76,7 +76,7 @@ services:
       - tmail
 
   s3:
-    image: registry.scality.com/cloudserver/cloudserver:8.7.25
+    image: ghcr.io/scality/cloudserver:c1ba296859690c1cbbec609aaae430f6b04b4745
     container_name: s3.docker.test
     environment:
       SCALITY_ACCESS_KEY_ID: accessKey1
@@ -87,7 +87,7 @@ services:
       - tmail
 
   rabbitmq:
-    image: rabbitmq:3.12.1-management
+    image: rabbitmq:4.0.9-management
     ports:
       - "5672:5672"
       - "15672:15672"

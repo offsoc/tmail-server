@@ -167,6 +167,17 @@ trait JmapSettingsRepositoryContract {
   }
 
   @Test
+  def updatePartialShouldInsertSettingsWhenUserHasNoSettings(): Unit = {
+    val settingsStateUpdate: SettingsStateUpdate = SMono(testee.updatePartial(BOB, JmapSettingsPatch(
+      JmapSettingsUpsertRequest(Map("key3".asSettingKey -> JmapSettingsValue("value3"))),
+      Seq()))).block()
+
+    assertThat(settingsStateUpdate.oldState).isEqualTo(JmapSettingsStateFactory.INITIAL)
+    assertThat(SMono(testee.get(BOB)).block().settings.asJava)
+      .containsExactlyInAnyOrderEntriesOf(java.util.Map.ofEntries(entry("key3".asSettingKey, JmapSettingsValue("value3"))))
+  }
+
+  @Test
   def updatePartialShouldAppendNewSettingEntryInPatch(): Unit = {
     SMono(testee.reset(BOB, Map(("key1", "value1")).asUpsertRequest)).block()
     SMono(testee.updatePartial(BOB, JmapSettingsPatch(
@@ -227,6 +238,8 @@ trait JmapSettingsRepositoryContract {
     SMono(testee.delete(BOB)).block()
 
     assertThat(SMono(testee.get(BOB)).block()).isNull()
+    assertThat(SMono(testee.getLatestState(BOB)).block())
+      .isEqualTo(JmapSettingsStateFactory.INITIAL)
   }
 
   @Test
@@ -247,6 +260,19 @@ trait JmapSettingsRepositoryContract {
 
     assertThat(SMono(testee.get(BOB)).block().settings.asJava)
       .containsExactly(entry("key1".asSettingKey, JmapSettingsValue("value1")))
+  }
+
+  @Test
+  def insertSettingsAfterDeletingSettingsShouldWorkWell(): Unit = {
+    // This test simulates a scenario where the user record exists but has no settings yet.
+    SMono(testee.reset(BOB, Map(("key1", "whatever"), ("key2", "whatever")).asUpsertRequest)).block()
+    SMono(testee.delete(BOB)).block()
+
+    SMono(testee.reset(BOB, Map(("key1", "value1")).asUpsertRequest)).block()
+    val settings = SMono(testee.get(BOB)).block()
+
+    assertThat(settings.settings.asJava).containsExactly(entry("key1".asSettingKey, JmapSettingsValue("value1")))
+    assertThat(settings.state).isEqualTo(SMono(testee.getLatestState(BOB)).block())
   }
 
   @Test

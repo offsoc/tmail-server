@@ -1,0 +1,86 @@
+= Twake Workplace Integration
+:navtitle: Twake Workplace Integration
+
+== Twake Workplace Settings synchronization
+
+The Twake Workplace (TWP) Settings module allows TMail to integrate with Twake Workplace for user settings synchronization. This module enables TMail to receive and apply user settings updates from Twake Workplace through RabbitMQ.
+
+=== How It Works
+
+When enabled, the TWP Settings module:
+
+1. Connects to the configured RabbitMQ server
+2. Listens for user settings updates on the specified exchange and routing key
+3. Applies the received settings to the corresponding user in TMail
+
+This allows for seamless integration between Twake Workplace and TMail, ensuring that user settings are synchronized across the TWP platform.
+
+Users will not be able to modify related TWP settings from TMail, as they are read-only. Any changes to TWP settings must be made in Twake Workplace, and those changes will be reflected in TMail through the RabbitMQ updates.
+
+=== Enabling TWP Settings Module
+
+By default, the TWP Settings module is disabled.
+
+To enable the TWP Settings module, you need to configure the `TWPReadOnlyPropertyProvider` in the `jmap.properties` file:
+
+- `settings.readonly.properties.providers`: Add the `TWPReadOnlyPropertyProvider` class to the list of property providers.
+
+Example configuration in `jmap.properties`:
+
+....
+settings.readonly.properties.providers=com.linagora.tmail.james.jmap.settings.TWPReadOnlyPropertyProvider
+....
+
+If you have multiple property providers, separate them with commas:
+
+....
+settings.readonly.properties.providers=com.linagora.tmail.james.jmap.settings.TWPReadOnlyPropertyProvider,com.linagora.tmail.james.jmap.settings.FixedLanguageReadOnlyPropertyProvider
+....
+
+=== RabbitMQ Configuration
+
+The TWP Settings module may require RabbitMQ configuration to function properly. See the xref:tmail-backend/configure/rabbitmq.adoc#_twp_settings_configuration[RabbitMQ TWP Settings Configuration] section for details on configuring the RabbitMQ properties.
+
+== Configuring Software as a Service Integration
+
+SaaS (Software as a Service) integration allows TMail to manage user plans and associated capabilities based on their SaaS subscriptions, (e.g., free, standard, premium). This integration is optional, disabled by default, and can be enabled by loading the corresponding Guice module.
+
+To enable SaaS integration module, you need to load the corresponding extension Guice modules in `extension.properties`:
+
+[source,java]
+----
+com.linagora.tmail.james.app.MemorySaaSModule
+com.linagora.tmail.james.app.DistributedSaaSModule
+com.linagora.tmail.james.app.PostgresSaaSModule
+----
+
+If you use the `DistributedSaaSModule`, you need to add SaaS related columns (`saas_plan`) to the Cassandra `users` table. For example:
+
+```
+ALTER TABLE tmail_keyspace.user ADD saas_plan text;
+```
+
+If you use the `PostgresSaaSModule`, you need to add SaaS related columns (`saas_plan`) to the Postgres `users` table. For example:
+
+```
+ALTER TABLE tmail_schema.users ADD COLUMN saas_plan VARCHAR;
+```
+
+=== SenderHasAnySaaSPlan matcher
+
+The `SenderHasAnySaaSPlan` matcher can be used to determine if the sender of an email has a SaaS plan.
+
+=== SenderHasSaaSPlan matcher
+
+The `SenderHasSaaSPlan` matcher allows to match emails where the sender has a specific SaaS plan.
+This is useful for applying mail processing rules based on the sender's SaaS subscription.
+
+To use the matcher, specify a comma-separated list of SaaS plan names as the condition.
+For example, to match senders with either the `standard` or `premium` plan:
+
+[source,xml]
+----
+<mailet match="SenderHasSaaSPlan=standard,premium" class="..." />
+----
+
+If the sender's SaaS plan matches any of the specified plans, the matcher will return the recipients of the email.

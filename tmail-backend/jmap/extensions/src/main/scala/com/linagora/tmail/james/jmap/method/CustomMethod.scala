@@ -22,6 +22,7 @@ import com.google.inject.AbstractModule
 import com.google.inject.multibindings.{Multibinder, ProvidesIntoSet}
 import com.linagora.tmail.james.jmap.method.CapabilityIdentifier.LINAGORA_ECHO
 import eu.timepit.refined.auto._
+import org.apache.james.core.Username
 import org.apache.james.jmap.core.CapabilityIdentifier.{CapabilityIdentifier, JMAP_CORE}
 import org.apache.james.jmap.core.Invocation.MethodName
 import org.apache.james.jmap.core.{Capability, CapabilityFactory, CapabilityProperties, UrlPrefixes}
@@ -47,6 +48,7 @@ object CapabilityIdentifier {
   val LINAGORA_CONTACT_SUPPORT: CapabilityIdentifier = "com:linagora:params:jmap:contact:support"
   val LINAGORA_DOWNLOAD_ALL: CapabilityIdentifier = "com:linagora:params:downloadAll"
   val LINAGORA_MAILBOX_CLEAR: CapabilityIdentifier = "com:linagora:params:jmap:mailbox:clear"
+  val LINAGORA_SAAS: CapabilityIdentifier = "com:linagora:params:saas"
 }
 
 case object CustomCapabilityProperties extends CapabilityProperties {
@@ -64,7 +66,7 @@ class CustomCapabilitiesModule extends AbstractModule {
 }
 
 case object CustomCapabilityFactory extends CapabilityFactory {
-  override def create(urlPrefixes: UrlPrefixes): Capability = CustomCapability
+  override def create(urlPrefixes: UrlPrefixes, username: Username): Capability = CustomCapability
 
   override def id(): CapabilityIdentifier = LINAGORA_ECHO
 }

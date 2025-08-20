@@ -12,6 +12,82 @@ software documentation. Do not follow this guide blindly!
 
 Note: this section is in progress. It will be updated during all the development process until the release.
 
+## 1.0.9
+
+### Adding settings and rate limiting plan id columns to Cassandra user table
+
+Date: 16/07/2025
+
+Issue: https://github.com/linagora/tmail-backend/issues/1831
+
+Concerned product: Distributed TMail
+
+Add `settings`, `settings_state`, and `rate_limiting_plan_id` columns to the `user` table to store user-bound settings and rate limiting plan information.
+
+To add these columns, you need to run the following CQL commands:
+```
+ALTER TABLE tmail_keyspace.user ADD settings map<text, text>;
+ALTER TABLE tmail_keyspace.user ADD settings_state uuid;
+ALTER TABLE tmail_keyspace.user ADD rate_limiting_plan_id uuid;
+```
+
+The `rate_limit_plan_user` table and `settings` can be dropped now:
+```
+DROP TABLE tmail_keyspace.rate_limit_plan_user;
+DROP TABLE tmail_keyspace.settings;
+```
+
+### SaaS deployment: adding `saas_plan` column to Cassandra user table
+
+Date: 04/08/2025
+
+Issue: https://github.com/linagora/tmail-backend/issues/1840
+
+Concerned product: Distributed TMail
+
+If you are running TMail in a SaaS deployment with the extension `DistributedSaaSModule` enabled in `extensions.properties`, you need to add the `saas_plan` column to the Cassandra `user` table:
+```
+ALTER TABLE tmail_keyspace.user ADD saas_plan text;
+```
+
+Otherwise, you can skip this step.
+
+### Adding settings and rate limiting plan id columns to Postgres users table
+
+Date: 17/07/2025
+
+Issue: https://github.com/linagora/tmail-backend/issues/1835
+
+Concerned product: Postgres TMail
+
+Add `settings`, `settings_state`, and `rate_limiting_plan_id` columns to the `users` table to store user-bound settings and rate limiting plan information.
+
+To add these columns, you need to run the following SQL commands:
+```sql
+ALTER TABLE tmail_schema.users ADD COLUMN settings HSTORE;
+ALTER TABLE tmail_schema.users ADD COLUMN settings_state UUID;
+ALTER TABLE tmail_schema.users ADD COLUMN rate_limiting_plan_id UUID;
+```
+
+The `rate_limit_plan_user` table and `jmap_settings` table can be dropped now:
+```sql
+DROP TABLE tmail_schema.rate_limit_plan_user;
+DROP TABLE tmail_schema.jmap_settings;
+```
+
+### SaaS deployment: adding `saas_plan` column to Postgres users table
+
+Date: 05/08/2025
+
+Issue: https://github.com/linagora/tmail-backend/issues/1840
+
+Concerned product: Postgres TMail
+
+If you are running TMail in a SaaS deployment with the extension `PostgresSaaSModule` enabled in `extensions.properties`, you need to add the `saas_plan` column to the Postgres `users` table:
+```
+ALTER TABLE tmail_schema.users ADD COLUMN saas_plan VARCHAR;
+```
+
 ## 1.0.5
 
 - [Add new field to user contact index](#add-new-field-to-user-contact-index)

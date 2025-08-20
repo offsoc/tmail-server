@@ -39,6 +39,10 @@
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
+            <artifactId>tmail-guice-data-postgres</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
             <artifactId>tmail-guice-distributed</artifactId>
         </dependency>
         <dependency>
@@ -216,6 +220,10 @@
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>tmail-rate-limiter-postgres</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>tmail-saas-postgres</artifactId>
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
