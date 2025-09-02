@@ -16,10 +16,10 @@
  *  more details.                                                   *
  *******************************************************************/
 
-package com.linagora.tmail.james.jmap.settings;
+package com.linagora.tmail.saas.rabbitmq.subscription;
 
-import static com.linagora.tmail.james.jmap.settings.TWPSettingsConsumer.TWP_SETTINGS_INJECTION_KEY;
-import static com.linagora.tmail.james.jmap.settings.TWPSettingsConsumer.TWP_SETTINGS_QUEUE;
+import static com.linagora.tmail.saas.rabbitmq.TWPConstants.TWP_INJECTION_KEY;
+import static com.linagora.tmail.saas.rabbitmq.subscription.SaaSSubscriptionConsumer.SAAS_SUBSCRIPTION_QUEUE;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
@@ -36,21 +36,21 @@ import com.linagora.tmail.RabbitMQManagementAPI;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-public class TWPSettingsQueueConsumerHealthCheck implements HealthCheck {
-    private static final Logger LOGGER = LoggerFactory.getLogger(TWPSettingsQueueConsumerHealthCheck.class);
-    public static final ComponentName COMPONENT_NAME = new ComponentName("TWPSettingsQueueConsumerHealthCheck");
+public class SaaSSubscriptionQueueConsumerHealthCheck implements HealthCheck {
+    private static final Logger LOGGER = LoggerFactory.getLogger(SaaSSubscriptionQueueConsumerHealthCheck.class);
+    public static final ComponentName COMPONENT_NAME = new ComponentName("SaaSSubscriptionQueueConsumerHealthCheck");
     private static final String DEFAULT_VHOST = "/";
 
     private final RabbitMQConfiguration twpRabbitMQConfiguration;
-    private final TWPSettingsConsumer twpSettingsConsumer;
+    private final SaaSSubscriptionConsumer saaSSubscriptionConsumer;
     private final RabbitMQManagementAPI api;
 
     @Inject
-    public TWPSettingsQueueConsumerHealthCheck(@Named(TWP_SETTINGS_INJECTION_KEY) RabbitMQConfiguration twpRabbitMQConfiguration,
-                                               TWPSettingsConsumer twpSettingsConsumer) {
+    public SaaSSubscriptionQueueConsumerHealthCheck(@Named(TWP_INJECTION_KEY) RabbitMQConfiguration twpRabbitMQConfiguration,
+                                                    SaaSSubscriptionConsumer saaSSubscriptionConsumer) {
         this.twpRabbitMQConfiguration = twpRabbitMQConfiguration;
         this.api = RabbitMQManagementAPI.from(twpRabbitMQConfiguration);
-        this.twpSettingsConsumer = twpSettingsConsumer;
+        this.saaSSubscriptionConsumer = saaSSubscriptionConsumer;
     }
 
     @Override
@@ -60,26 +60,26 @@ public class TWPSettingsQueueConsumerHealthCheck implements HealthCheck {
 
     @Override
     public Mono<Result> check() {
-        return Mono.fromCallable(() -> api.queueDetails(twpRabbitMQConfiguration.getVhost().orElse(DEFAULT_VHOST), TWP_SETTINGS_QUEUE)
+        return Mono.fromCallable(() -> api.queueDetails(twpRabbitMQConfiguration.getVhost().orElse(DEFAULT_VHOST), SAAS_SUBSCRIPTION_QUEUE)
                 .getConsumerDetails())
             .flatMap(consumers -> {
                 if (consumers.isEmpty()) {
-                    return restartTWPSettingsConsumer();
+                    return restartSaaSSubscriptionConsumer();
                 }
                 return Mono.fromCallable(() -> Result.healthy(COMPONENT_NAME));
             })
-            .onErrorResume(e -> Mono.just(Result.unhealthy(COMPONENT_NAME, "Error checking TWPSettingsQueueConsumerHealthCheck", e)))
+            .onErrorResume(e -> Mono.just(Result.unhealthy(COMPONENT_NAME, "Error checking SaaSSubscriptionQueueConsumerHealthCheck", e)))
             .subscribeOn(Schedulers.boundedElastic());
     }
 
-    private Mono<Result> restartTWPSettingsConsumer() {
-        LOGGER.warn("TWPSettingsQueueConsumerHealthCheck found no consumers, restarting the consumer");
+    private Mono<Result> restartSaaSSubscriptionConsumer() {
+        LOGGER.warn("SaaSSubscriptionQueueConsumerHealthCheck found no consumers, restarting the consumer");
 
-        return Mono.fromRunnable(twpSettingsConsumer::restartConsumer)
-            .thenReturn(Result.degraded(COMPONENT_NAME, "The TWP settings queue has no consumers"))
+        return Mono.fromRunnable(saaSSubscriptionConsumer::restartConsumer)
+            .thenReturn(Result.degraded(COMPONENT_NAME, "The SaaS subscription queue has no consumers"))
             .onErrorResume(error -> {
-                LOGGER.error("Error while restarting TWP settings consumer", error);
-                return Mono.fromCallable(() -> Result.degraded(COMPONENT_NAME, "The TWP settings queue has no consumers"));
+                LOGGER.error("Error while restarting SaaS subscription consumer", error);
+                return Mono.fromCallable(() -> Result.degraded(COMPONENT_NAME, "The SaaS subscription queue has no consumers"));
             });
     }
 }

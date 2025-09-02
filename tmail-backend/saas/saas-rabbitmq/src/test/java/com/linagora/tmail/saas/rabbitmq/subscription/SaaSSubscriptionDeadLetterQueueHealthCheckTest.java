@@ -16,10 +16,10 @@
  *  more details.                                                   *
  *******************************************************************/
 
-package com.linagora.tmail.james.jmap.settings;
+package com.linagora.tmail.saas.rabbitmq.subscription;
 
-import static com.linagora.tmail.james.jmap.settings.TWPCommonSettingsConfiguration.TWP_SETTINGS_EXCHANGE_DEFAULT;
-import static com.linagora.tmail.james.jmap.settings.TWPSettingsConsumer.TWP_SETTINGS_DEAD_LETTER_QUEUE;
+import static com.linagora.tmail.saas.rabbitmq.subscription.SaaSSubscriptionConsumer.SAAS_SUBSCRIPTION_DEAD_LETTER_QUEUE;
+import static com.linagora.tmail.saas.rabbitmq.subscription.SaaSSubscriptionRabbitMQConfiguration.TWP_SAAS_SUBSCRIPTION_EXCHANGE_DEFAULT;
 import static com.rabbitmq.client.BuiltinExchangeType.FANOUT;
 import static com.rabbitmq.client.MessageProperties.PERSISTENT_TEXT_PLAIN;
 import static org.apache.james.backends.rabbitmq.Constants.AUTO_DELETE;
@@ -48,7 +48,7 @@ import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 
-class TWPSettingsDeadLetterQueueHealthCheckTest {
+class SaaSSubscriptionDeadLetterQueueHealthCheckTest {
     @RegisterExtension
     static RabbitMQExtension rabbitMQExtension = RabbitMQExtension.singletonRabbitMQ()
         .isolationPolicy(RabbitMQExtension.IsolationPolicy.STRONG);
@@ -58,7 +58,7 @@ class TWPSettingsDeadLetterQueueHealthCheckTest {
 
     private Connection connection;
     private Channel channel;
-    private TWPSettingsDeadLetterQueueHealthCheck testee;
+    private SaaSSubscriptionDeadLetterQueueHealthCheck testee;
 
     @BeforeEach
     void setup(DockerRabbitMQ rabbitMQ) throws IOException, TimeoutException, URISyntaxException, InterruptedException {
@@ -70,7 +70,7 @@ class TWPSettingsDeadLetterQueueHealthCheckTest {
         connectionFactory.setVirtualHost(TWP_VHOST);
         connection = connectionFactory.newConnection();
         channel = connection.createChannel();
-        testee = new TWPSettingsDeadLetterQueueHealthCheck(rabbitMQ.getConfigurationBuilder()
+        testee = new SaaSSubscriptionDeadLetterQueueHealthCheck(rabbitMQ.getConfigurationBuilder()
             .vhost(Optional.of(TWP_VHOST))
             .build());
     }
@@ -89,8 +89,8 @@ class TWPSettingsDeadLetterQueueHealthCheckTest {
     }
 
     @Test
-    void healthCheckShouldReturnHealthyWhenTWPSettingsDeadLetterQueueIsEmpty() throws Exception {
-        createDeadLetterQueue(TWP_SETTINGS_DEAD_LETTER_QUEUE);
+    void healthCheckShouldReturnHealthyWhenSaaSSubscriptionDeadLetterQueueIsEmpty() throws Exception {
+        createDeadLetterQueue(SAAS_SUBSCRIPTION_DEAD_LETTER_QUEUE);
 
         assertThat(testee.check().block().isHealthy()).isTrue();
     }
@@ -101,17 +101,17 @@ class TWPSettingsDeadLetterQueueHealthCheckTest {
     }
 
     @Test
-    void healthCheckShouldReturnDegradedWhenTWPSettingsDeadLetterQueueIsNotEmpty() throws Exception {
-        createDeadLetterQueue(TWP_SETTINGS_DEAD_LETTER_QUEUE);
+    void healthCheckShouldReturnDegradedWhenSaaSSubscriptionDeadLetterQueueIsNotEmpty() throws Exception {
+        createDeadLetterQueue(SAAS_SUBSCRIPTION_DEAD_LETTER_QUEUE);
         publishAMessage();
 
         awaitAtMostOneMinute.until(() -> testee.check().block().isDegraded());
     }
 
     private void createDeadLetterQueue(String deadLetterQueue) throws IOException {
-        channel.exchangeDeclare(TWP_SETTINGS_EXCHANGE_DEFAULT, FANOUT, DURABLE);
+        channel.exchangeDeclare(TWP_SAAS_SUBSCRIPTION_EXCHANGE_DEFAULT, FANOUT, DURABLE);
         channel.queueDeclare(deadLetterQueue, DURABLE, !EXCLUSIVE, AUTO_DELETE, NO_QUEUE_DECLARE_ARGUMENTS).getQueue();
-        channel.queueBind(deadLetterQueue, TWP_SETTINGS_EXCHANGE_DEFAULT, "routingKey");
+        channel.queueBind(deadLetterQueue, TWP_SAAS_SUBSCRIPTION_EXCHANGE_DEFAULT, "routingKey");
     }
 
     private void publishAMessage() throws IOException {
@@ -121,7 +121,7 @@ class TWPSettingsDeadLetterQueueHealthCheckTest {
             .contentType(PERSISTENT_TEXT_PLAIN.getContentType())
             .build();
 
-        channel.basicPublish(TWP_SETTINGS_EXCHANGE_DEFAULT, "routingKey", basicProperties, "Hello, world!".getBytes(StandardCharsets.UTF_8));
+        channel.basicPublish(TWP_SAAS_SUBSCRIPTION_EXCHANGE_DEFAULT, "routingKey", basicProperties, "Hello, world!".getBytes(StandardCharsets.UTF_8));
     }
 
     private void closeQuietly(AutoCloseable... closeables) {
