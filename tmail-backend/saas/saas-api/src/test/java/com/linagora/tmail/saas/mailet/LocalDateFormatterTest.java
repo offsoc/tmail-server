@@ -16,10 +16,29 @@
  *  more details.                                                   *
  *******************************************************************/
 
-package com.linagora.tmail.saas.model;
+package com.linagora.tmail.saas.mailet;
 
-public record SaaSPlan(String value) {
-    public static final SaaSPlan FREE = new SaaSPlan("free");
-    public static final SaaSPlan STANDARD = new SaaSPlan("standard");
-    public static final SaaSPlan PREMIUM = new SaaSPlan("premium");
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.ZonedDateTime;
+import java.util.Locale;
+
+import org.junit.jupiter.api.Test;
+
+public class LocalDateFormatterTest {
+    @Test
+    void englishLocalDateFormatTest() {
+        ZonedDateTime zonedDateTime = ZonedDateTime.parse("2015-10-30T14:12:00Z");
+
+        assertThat(zonedDateTime.format(I18NDSNBounce.localizedDateFormatter(Locale.ENGLISH)))
+            .isEqualTo("Friday, 30 October 2015 14:12:00 Z");
+    }
+
+    @Test
+    void frenchLocalDateFormatTest() {
+        ZonedDateTime zonedDateTime = ZonedDateTime.parse("2015-10-30T14:12:00Z");
+
+        assertThat(zonedDateTime.format(I18NDSNBounce.localizedDateFormatter(Locale.FRENCH)))
+            .isEqualTo("vendredi, 30 octobre 2015 14:12:00 Z");
+    }
 }
