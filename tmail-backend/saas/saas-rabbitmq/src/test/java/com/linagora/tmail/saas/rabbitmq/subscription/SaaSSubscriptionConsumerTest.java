@@ -18,6 +18,12 @@
 
 package com.linagora.tmail.saas.rabbitmq.subscription;
 
+import static com.linagora.tmail.rate.limiter.api.model.RateLimitingDefinition.MAILS_RECEIVED_PER_DAYS_UNLIMITED;
+import static com.linagora.tmail.rate.limiter.api.model.RateLimitingDefinition.MAILS_RECEIVED_PER_HOURS_UNLIMITED;
+import static com.linagora.tmail.rate.limiter.api.model.RateLimitingDefinition.MAILS_RECEIVED_PER_MINUTE_UNLIMITED;
+import static com.linagora.tmail.rate.limiter.api.model.RateLimitingDefinition.MAILS_SENT_PER_DAYS_UNLIMITED;
+import static com.linagora.tmail.rate.limiter.api.model.RateLimitingDefinition.MAILS_SENT_PER_HOURS_UNLIMITED;
+import static com.linagora.tmail.rate.limiter.api.model.RateLimitingDefinition.MAILS_SENT_PER_MINUTE_UNLIMITED;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.james.backends.rabbitmq.RabbitMQFixture.DEFAULT_MANAGEMENT_CREDENTIAL;
 import static org.apache.james.mailbox.inmemory.manager.InMemoryIntegrationResources.defaultResources;
@@ -48,6 +54,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import com.linagora.tmail.rate.limiter.api.RateLimitingRepository;
+import com.linagora.tmail.rate.limiter.api.memory.MemoryRateLimitingRepository;
+import com.linagora.tmail.rate.limiter.api.model.RateLimitingDefinition;
 import com.linagora.tmail.saas.api.SaaSAccountRepository;
 import com.linagora.tmail.saas.api.memory.MemorySaaSAccountRepository;
 import com.linagora.tmail.saas.model.SaaSAccount;
@@ -61,7 +70,22 @@ class SaaSSubscriptionConsumerTest {
     private static final String ROUTING_KEY = SaaSSubscriptionRabbitMQConfiguration.TWP_SAAS_SUBSCRIPTION_ROUTING_KEY_DEFAULT;
     private static final Username ALICE = Username.of("alice@james.org");
     private static final Username BOB = Username.of("bob@james.org");
-    private static final Username NON_EXISTING_USER = Username.of("nonExisting@james.org");
+    RateLimitingDefinition RATE_LIMITING_1 = RateLimitingDefinition.builder()
+        .mailsSentPerMinute(10L)
+        .mailsSentPerHours(100L)
+        .mailsSentPerDays(1000L)
+        .mailsReceivedPerMinute(20L)
+        .mailsReceivedPerHours(200L)
+        .mailsReceivedPerDays(2000L)
+        .build();
+    RateLimitingDefinition UNLIMITED = RateLimitingDefinition.builder()
+        .mailsSentPerMinute(MAILS_SENT_PER_MINUTE_UNLIMITED)
+        .mailsSentPerHours(MAILS_SENT_PER_HOURS_UNLIMITED)
+        .mailsSentPerDays(MAILS_SENT_PER_DAYS_UNLIMITED)
+        .mailsReceivedPerMinute(MAILS_RECEIVED_PER_MINUTE_UNLIMITED)
+        .mailsReceivedPerHours(MAILS_RECEIVED_PER_HOURS_UNLIMITED)
+        .mailsReceivedPerDays(MAILS_RECEIVED_PER_DAYS_UNLIMITED)
+        .build();
 
     private final ConditionFactory await = Awaitility.with()
         .pollInterval(Duration.ofMillis(500))
@@ -82,6 +106,7 @@ class SaaSSubscriptionConsumerTest {
     private SaaSAccountRepository saasAccountRepository;
     private MaxQuotaManager maxQuotaManager;
     private UserQuotaRootResolver userQuotaRootResolver;
+    private RateLimitingRepository rateLimitingRepository;
 
     @BeforeEach
     void setUp(UsersRepositoryContract.TestSystem testSystem) throws URISyntaxException, UsersRepositoryException {
@@ -108,6 +133,8 @@ class SaaSSubscriptionConsumerTest {
         usersRepository.addUser(ALICE, "password");
         usersRepository.addUser(BOB, "password");
 
+        rateLimitingRepository = new MemoryRateLimitingRepository();
+
         testee = new SaaSSubscriptionConsumer(
             rabbitMQExtension.getRabbitChannelPool(),
             rabbitMQConfiguration,
@@ -116,7 +143,8 @@ class SaaSSubscriptionConsumerTest {
             usersRepository,
             saasAccountRepository,
             maxQuotaManager,
-            userQuotaRootResolver);
+            userQuotaRootResolver,
+            rateLimitingRepository);
         testee.init();
     }
 
@@ -129,10 +157,20 @@ class SaaSSubscriptionConsumerTest {
     void shouldRegisterSaasAccountDetails() {
         String validMessage = String.format("""
             {
-                "username": "%s",
+                "internalEmail": "%s",
                 "isPaying": true,
                 "canUpgrade": true,
-                "mail": { "storageQuota": 12334534 }
+                "features": {
+                    "mail": {
+                        "storageQuota": 123,
+                        "mailsSentPerMinute": 10,
+                        "mailsSentPerHour": 100,
+                        "mailsSentPerDay": 1000,
+                        "mailsReceivedPerMinute": 20,
+                        "mailsReceivedPerHour": 200,
+                        "mailsReceivedPerDay": 2000
+                    }
+                }
             }
             """, ALICE.asString());
 
@@ -150,18 +188,55 @@ class SaaSSubscriptionConsumerTest {
     void shouldSetStorageQuotaWhenUserHasNoPlanYet() {
         String validMessage = String.format("""
             {
-                "username": "%s",
+                "internalEmail": "%s",
                 "isPaying": true,
                 "canUpgrade": true,
-                "mail": { "storageQuota": 1234 }
+                "features": {
+                    "mail": {
+                        "storageQuota": 1234,
+                        "mailsSentPerMinute": 10,
+                        "mailsSentPerHour": 100,
+                        "mailsSentPerDay": 1000,
+                        "mailsReceivedPerMinute": 20,
+                        "mailsReceivedPerHour": 200,
+                        "mailsReceivedPerDay": 2000
+                    }
+                }
+            }
+            """, ALICE.asString());
+
+        publishAmqpSaaSSubscriptionMessage(validMessage);
+
+        await.untilAsserted(() -> assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(ALICE)))
+            .isEqualTo(Optional.of(QuotaSizeLimit.size(1234))));
+    }
+
+    @Test
+    void shouldSetRateLimitingWhenUserHasNoPlanYet() {
+        String validMessage = String.format("""
+            {
+                "internalEmail": "%s",
+                "isPaying": true,
+                "canUpgrade": true,
+                "features": {
+                    "mail": {
+                        "storageQuota": 1234,
+                        "mailsSentPerMinute": 10,
+                        "mailsSentPerHour": 100,
+                        "mailsSentPerDay": 1000,
+                        "mailsReceivedPerMinute": 20,
+                        "mailsReceivedPerHour": 200,
+                        "mailsReceivedPerDay": 2000
+                    }
+                }
             }
             """, ALICE.asString());
 
         publishAmqpSaaSSubscriptionMessage(validMessage);
 
         await.untilAsserted(() -> {
-            assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(ALICE)))
-                .isEqualTo(Optional.of(QuotaSizeLimit.size(1234)));
+            RateLimitingDefinition rateLimitingDefinition = Mono.from(rateLimitingRepository.getRateLimiting(ALICE)).block();
+            assertThat(rateLimitingDefinition).isEqualTo(RATE_LIMITING_1);
         });
     }
 
@@ -169,32 +244,79 @@ class SaaSSubscriptionConsumerTest {
     void shouldSupportSetUnlimitedStorageQuota() {
         String validMessage = String.format("""
             {
-                "username": "%s",
+                "internalEmail": "%s",
                 "isPaying": true,
                 "canUpgrade": true,
-                "mail": { "storageQuota": -1 }
+                "features": {
+                    "mail": {
+                        "storageQuota": -1,
+                        "mailsSentPerMinute": 10,
+                        "mailsSentPerHour": 100,
+                        "mailsSentPerDay": 1000,
+                        "mailsReceivedPerMinute": 20,
+                        "mailsReceivedPerHour": 200,
+                        "mailsReceivedPerDay": 2000
+                    }
+                }
+            }
+            """, ALICE.asString());
+
+        publishAmqpSaaSSubscriptionMessage(validMessage);
+
+        await.untilAsserted(() -> assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(ALICE)))
+            .isEqualTo(Optional.of(QuotaSizeLimit.unlimited())));
+    }
+
+    @Test
+    void shouldSupportSetUnlimitedRateLimiting() {
+        String validMessage = String.format("""
+            {
+                "internalEmail": "%s",
+                "isPaying": true,
+                "canUpgrade": true,
+                "features": {
+                    "mail": {
+                        "storageQuota": 1000,
+                        "mailsSentPerMinute": -1,
+                        "mailsSentPerHour": -1,
+                        "mailsSentPerDay": -1,
+                        "mailsReceivedPerMinute": -1,
+                        "mailsReceivedPerHour": -1,
+                        "mailsReceivedPerDay": -1
+                    }
+                }
             }
             """, ALICE.asString());
 
         publishAmqpSaaSSubscriptionMessage(validMessage);
 
         await.untilAsserted(() -> {
-            assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(ALICE)))
-                .isEqualTo(Optional.of(QuotaSizeLimit.unlimited()));
+            RateLimitingDefinition rateLimitingDefinition = Mono.from(rateLimitingRepository.getRateLimiting(ALICE)).block();
+            assertThat(rateLimitingDefinition).isEqualTo(UNLIMITED);
         });
     }
 
     @Test
-    void shouldUpdateNewPlanNameWhenNewSubscriptionUpdate() {
+    void shouldUpdateCanUpgradeWhenNewSubscriptionUpdate() {
         Mono.from(saasAccountRepository.upsertSaasAccount(ALICE,
             new SaaSAccount(true, true))).block();
 
         String validMessage = String.format("""
             {
-                "username": "%s",
+                "internalEmail": "%s",
                 "isPaying": true,
                 "canUpgrade": false,
-                "mail": { "storageQuota": 12334534 }
+                "features": {
+                    "mail": {
+                        "storageQuota": 12334534,
+                        "mailsSentPerMinute": 10,
+                        "mailsSentPerHour": 100,
+                        "mailsSentPerDay": 1000,
+                        "mailsReceivedPerMinute": 20,
+                        "mailsReceivedPerHour": 200,
+                        "mailsReceivedPerDay": 2000
+                    }
+                }
             }
             """, ALICE.asString());
 
@@ -213,18 +335,72 @@ class SaaSSubscriptionConsumerTest {
 
         String validMessage = String.format("""
             {
-                "username": "%s",
+                "internalEmail": "%s",
                 "isPaying": true,
                 "canUpgrade": false,
-                "mail": { "storageQuota": 12334534 }
+                "features": {
+                    "mail": {
+                        "storageQuota": 12334534,
+                        "mailsSentPerMinute": 10,
+                        "mailsSentPerHour": 100,
+                        "mailsSentPerDay": 1000,
+                        "mailsReceivedPerMinute": 20,
+                        "mailsReceivedPerHour": 200,
+                        "mailsReceivedPerDay": 2000
+                    }
+                }
             }
             """, ALICE.asString());
 
         publishAmqpSaaSSubscriptionMessage(validMessage);
 
+        await.untilAsserted(() -> assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(ALICE)))
+            .isEqualTo(Optional.of(QuotaSizeLimit.size(12334534))));
+    }
+
+    @Test
+    void shouldUpdateRateLimitingWhenNewSubscriptionUpdate() {
+        publishAmqpSaaSSubscriptionMessage(String.format("""
+            {
+                "internalEmail": "%s",
+                "isPaying": true,
+                "canUpgrade": false,
+                "features": {
+                    "mail": {
+                        "storageQuota": 12334534,
+                        "mailsSentPerMinute": 1,
+                        "mailsSentPerHour": 1,
+                        "mailsSentPerDay": 1,
+                        "mailsReceivedPerMinute": 2,
+                        "mailsReceivedPerHour": 2,
+                        "mailsReceivedPerDay": 2
+                    }
+                }
+            }
+            """, ALICE.asString()));
+
+        publishAmqpSaaSSubscriptionMessage(String.format("""
+            {
+                "internalEmail": "%s",
+                "isPaying": true,
+                "canUpgrade": false,
+                "features": {
+                    "mail": {
+                        "storageQuota": 12334534,
+                        "mailsSentPerMinute": 10,
+                        "mailsSentPerHour": 100,
+                        "mailsSentPerDay": 1000,
+                        "mailsReceivedPerMinute": 20,
+                        "mailsReceivedPerHour": 200,
+                        "mailsReceivedPerDay": 2000
+                    }
+                }
+            }
+            """, ALICE.asString()));
+
         await.untilAsserted(() -> {
-            assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(ALICE)))
-                .isEqualTo(Optional.of(QuotaSizeLimit.size(12334534)));
+            RateLimitingDefinition rateLimitingDefinition = Mono.from(rateLimitingRepository.getRateLimiting(ALICE)).block();
+            assertThat(rateLimitingDefinition).isEqualTo(RATE_LIMITING_1);
         });
     }
 
@@ -237,10 +413,20 @@ class SaaSSubscriptionConsumerTest {
         // Update Bob subscription should not effect Alice subscription
         String validMessage = String.format("""
             {
-                "username": "%s",
+                "internalEmail": "%s",
                 "isPaying": true,
                 "canUpgrade": false,
-                "mail": { "storageQuota": 12334534 }
+                "features": {
+                    "mail": {
+                        "storageQuota": 12334534,
+                        "mailsSentPerMinute": 10,
+                        "mailsSentPerHour": 100,
+                        "mailsSentPerDay": 1000,
+                        "mailsReceivedPerMinute": 20,
+                        "mailsReceivedPerHour": 200,
+                        "mailsReceivedPerDay": 2000
+                    }
+                }
             }
             """, BOB.asString());
         publishAmqpSaaSSubscriptionMessage(validMessage);
@@ -259,10 +445,20 @@ class SaaSSubscriptionConsumerTest {
     void shouldBeIdempotent() {
         String validMessage = String.format("""
             {
-                "username": "%s",
+                "internalEmail": "%s",
                 "isPaying": true,
                 "canUpgrade": false,
-                "mail": { "storageQuota": 1234 }
+                "features": {
+                    "mail": {
+                        "storageQuota": 1234,
+                        "mailsSentPerMinute": 10,
+                        "mailsSentPerHour": 100,
+                        "mailsSentPerDay": 1000,
+                        "mailsReceivedPerMinute": 20,
+                        "mailsReceivedPerHour": 200,
+                        "mailsReceivedPerDay": 2000
+                    }
+                }
             }
             """, ALICE.asString());
 
@@ -275,6 +471,8 @@ class SaaSSubscriptionConsumerTest {
             assertThat(saaSAccount.canUpgrade()).isFalse();
             assertThat(maxQuotaManager.getMaxStorage(userQuotaRootResolver.forUser(ALICE)))
                 .isEqualTo(Optional.of(QuotaSizeLimit.size(1234)));
+            RateLimitingDefinition rateLimitingDefinition = Mono.from(rateLimitingRepository.getRateLimiting(ALICE)).block();
+            assertThat(rateLimitingDefinition).isEqualTo(RATE_LIMITING_1);
         });
     }
 
@@ -286,10 +484,20 @@ class SaaSSubscriptionConsumerTest {
         // Publish a valid message after invalid one to ensure consumer is still alive
         String validMessage = String.format("""
             {
-                "username": "%s",
+                "internalEmail": "%s",
                 "isPaying": true,
                 "canUpgrade": false,
-                "mail": { "storageQuota": 12334534 }
+                "features": {
+                    "mail": {
+                        "storageQuota": 12334534,
+                        "mailsSentPerMinute": 10,
+                        "mailsSentPerHour": 100,
+                        "mailsSentPerDay": 1000,
+                        "mailsReceivedPerMinute": 20,
+                        "mailsReceivedPerHour": 200,
+                        "mailsReceivedPerDay": 2000
+                    }
+                }
             }
             """, ALICE.asString());
         publishAmqpSaaSSubscriptionMessage(validMessage);

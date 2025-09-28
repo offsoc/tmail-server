@@ -40,9 +40,12 @@ import org.apache.james.mailbox.quota.MaxQuotaManager;
 import org.apache.james.mailbox.quota.UserQuotaRootResolver;
 import org.apache.james.user.api.UsersRepository;
 import org.apache.james.user.api.model.User;
+import org.apache.james.util.ReactorUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.linagora.tmail.rate.limiter.api.RateLimitingRepository;
+import com.linagora.tmail.rate.limiter.api.model.RateLimitingDefinition;
 import com.linagora.tmail.saas.api.SaaSAccountRepository;
 import com.linagora.tmail.saas.model.SaaSAccount;
 import com.linagora.tmail.saas.rabbitmq.TWPCommonRabbitMQConfiguration;
@@ -77,6 +80,7 @@ public class SaaSSubscriptionConsumer implements Closeable, Startable {
     private final SaaSAccountRepository saasAccountRepository;
     private final MaxQuotaManager maxQuotaManager;
     private final UserQuotaRootResolver userQuotaRootResolver;
+    private final RateLimitingRepository rateLimitingRepository;
     private Disposable consumeSubscriptionDisposable;
 
     @Inject
@@ -87,7 +91,8 @@ public class SaaSSubscriptionConsumer implements Closeable, Startable {
                                     UsersRepository usersRepository,
                                     SaaSAccountRepository saasAccountRepository,
                                     MaxQuotaManager maxQuotaManager,
-                                    UserQuotaRootResolver userQuotaRootResolver) {
+                                    UserQuotaRootResolver userQuotaRootResolver,
+                                    RateLimitingRepository rateLimitingRepository) {
         this.receiverProvider = channelPool::createReceiver;
         this.sender = channelPool.getSender();
         this.rabbitMQConfiguration = rabbitMQConfiguration;
@@ -97,6 +102,7 @@ public class SaaSSubscriptionConsumer implements Closeable, Startable {
         this.saasAccountRepository = saasAccountRepository;
         this.maxQuotaManager = maxQuotaManager;
         this.userQuotaRootResolver = userQuotaRootResolver;
+        this.rateLimitingRepository = rateLimitingRepository;
     }
 
     public void init() {
@@ -183,16 +189,22 @@ public class SaaSSubscriptionConsumer implements Closeable, Startable {
 
     private Mono<Void> handleSubscriptionMessage(SaaSSubscriptionMessage subscriptionMessage) {
         SaaSAccount saaSAccount = new SaaSAccount(subscriptionMessage.canUpgrade(), subscriptionMessage.isPaying());
-        return Mono.fromCallable(() -> usersRepository.getUserByName(Username.of(subscriptionMessage.username())))
+        return Mono.fromCallable(() -> usersRepository.getUserByName(Username.of(subscriptionMessage.internalEmail())))
+            .subscribeOn(ReactorUtils.BLOCKING_CALL_WRAPPER)
             .map(User::getUserName)
             .flatMap(username -> Mono.from(saasAccountRepository.upsertSaasAccount(username, saaSAccount))
-                .then(updateStorageQuota(username, subscriptionMessage.mail().storageQuota()))
-                .doOnSuccess(success -> LOGGER.info("Updated SaaS subscription for user: {}, isPaying: {}, canUpgrade: {}, storageQuota: {}",
-                    username, subscriptionMessage.isPaying(), subscriptionMessage.canUpgrade(), subscriptionMessage.mail().storageQuota())));
+                .then(updateStorageQuota(username, subscriptionMessage.features().mail().storageQuota()))
+                .then(updateRateLimiting(username, subscriptionMessage.features().mail().rateLimitingDefinition()))
+                .doOnSuccess(success -> LOGGER.info("Updated SaaS subscription for user: {}, isPaying: {}, canUpgrade: {}, storageQuota: {}, rateLimiting: {}",
+                    username, subscriptionMessage.isPaying(), subscriptionMessage.canUpgrade(), subscriptionMessage.features().mail().storageQuota(), subscriptionMessage.features().mail().rateLimitingDefinition())));
     }
 
     private Mono<Void> updateStorageQuota(Username username, Long storageQuota) {
         return Mono.from(maxQuotaManager.setMaxStorageReactive(userQuotaRootResolver.forUser(username), asQuotaSizeLimit(storageQuota)));
+    }
+
+    private Mono<Void> updateRateLimiting(Username username, RateLimitingDefinition rateLimiting) {
+        return Mono.from(rateLimitingRepository.setRateLimiting(username, rateLimiting));
     }
 
     private QuotaSizeLimit asQuotaSizeLimit(Long storageQuota) {

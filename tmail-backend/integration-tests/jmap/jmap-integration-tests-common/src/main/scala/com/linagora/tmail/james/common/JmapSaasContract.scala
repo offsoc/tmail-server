@@ -19,7 +19,7 @@
 package com.linagora.tmail.james.common
 
 import com.linagora.tmail.common.probe.SaaSProbe
-import com.linagora.tmail.saas.model.{SaaSAccount}
+import com.linagora.tmail.saas.model.SaaSAccount
 import io.restassured.RestAssured.{`given`, requestSpecification}
 import io.restassured.http.ContentType.JSON
 import org.apache.http.HttpStatus.SC_OK
@@ -120,11 +120,19 @@ trait JmapSaasContract {
 
     publishAmqpSettingsMessage(
       s"""{
-         |    "username": "${BOB.asString()}",
+         |    "internalEmail": "${BOB.asString()}",
          |    "isPaying": true,
          |    "canUpgrade": true,
-         |    "mail": {
-         |        "storageQuota": 1234
+         |    "features": {
+         |      "mail": {
+         |        "storageQuota": 1234,
+         |        "mailsSentPerMinute": 10,
+         |        "mailsSentPerHour": 100,
+         |        "mailsSentPerDay": 1000,
+         |        "mailsReceivedPerMinute": 20,
+         |        "mailsReceivedPerHour": 200,
+         |        "mailsReceivedPerDay": 2000
+         |      }
          |    }
          |}""".stripMargin)
 
@@ -147,21 +155,37 @@ trait JmapSaasContract {
 
     publishAmqpSettingsMessage(
       s"""{
-         |    "username": "${BOB.asString()}",
+         |    "internalEmail": "${BOB.asString()}",
          |    "isPaying": false,
          |    "canUpgrade": true,
-         |    "mail": {
-         |        "storageQuota": 1234
+         |    "features": {
+         |      "mail": {
+         |        "storageQuota": 1234,
+         |        "mailsSentPerMinute": 1,
+         |        "mailsSentPerHour": 1,
+         |        "mailsSentPerDay": 1,
+         |        "mailsReceivedPerMinute": 1,
+         |        "mailsReceivedPerHour": 1,
+         |        "mailsReceivedPerDay": 1
+         |      }
          |    }
          |}""".stripMargin)
 
     publishAmqpSettingsMessage(
       s"""{
-         |    "username": "${BOB.asString()}",
+         |    "internalEmail": "${BOB.asString()}",
          |    "isPaying": true,
          |    "canUpgrade": true,
-         |    "mail": {
-         |        "storageQuota": 10000
+         |    "features": {
+         |      "mail": {
+         |        "storageQuota": 10000,
+         |        "mailsSentPerMinute": 10,
+         |        "mailsSentPerHour": 100,
+         |        "mailsSentPerDay": 1000,
+         |        "mailsReceivedPerMinute": 20,
+         |        "mailsReceivedPerHour": 200,
+         |        "mailsReceivedPerDay": 2000
+         |      }
          |    }
          |}""".stripMargin)
 
